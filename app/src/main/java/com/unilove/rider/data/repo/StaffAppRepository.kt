@@ -99,7 +99,7 @@ class StaffAppRepository(
       if (resolvedMode == RiderLoginMode.STAFF && normalizedRiderId.isNotBlank() && normalizedPin.isNotBlank()) {
         sessionStore.saveOfflinePin(riderId = normalizedRiderId, pin = normalizedPin)
       }
-      sessionStore.saveShiftStatus(ShiftStatus.ONLINE)
+      sessionStore.saveShiftStatus(ShiftStatus.OFFLINE)
       model
     }.mapKnownErrors(defaultMessage = "Unable to sign in. Please try again.")
   }
@@ -121,7 +121,7 @@ class StaffAppRepository(
       if (!sessionStore.canLoginOffline(riderId, pin)) {
         throw IllegalStateException("Invalid offline PIN for this rider.")
       }
-      sessionStore.saveShiftStatus(ShiftStatus.ONLINE)
+      sessionStore.saveShiftStatus(ShiftStatus.OFFLINE)
       cached
     }
   }

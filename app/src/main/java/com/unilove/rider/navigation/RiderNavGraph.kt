@@ -61,6 +61,7 @@ import com.unilove.rider.ui.screen.SettingsScreen
 import com.unilove.rider.ui.viewmodel.RiderAppViewModel
 
 sealed class RiderRoute(val route: String) {
+  data object Splash : RiderRoute("splash")
   data object Login : RiderRoute("login")
   data object Dispatch : RiderRoute("dispatch")
   data object Performance : RiderRoute("performance")
@@ -87,14 +88,21 @@ fun RiderApp(vm: RiderAppViewModel) {
   val ui by vm.ui.collectAsStateWithLifecycle()
   val navController = rememberNavController()
 
-  LaunchedEffect(ui.session != null) {
+  LaunchedEffect(ui.showSplash, ui.session != null) {
+    if (ui.showSplash) {
+      navController.navigate(RiderRoute.Splash.route) {
+        popUpTo(navController.graph.id) { inclusive = true }
+      }
+      return@LaunchedEffect
+    }
+
     if (ui.session == null) {
       navController.navigate(RiderRoute.Login.route) {
-        popUpTo(RiderRoute.Login.route) { inclusive = true }
+        popUpTo(navController.graph.id) { inclusive = true }
       }
     } else {
       navController.navigate(RiderRoute.Dispatch.route) {
-        popUpTo(RiderRoute.Login.route) { inclusive = true }
+        popUpTo(navController.graph.id) { inclusive = true }
       }
     }
   }
@@ -145,8 +153,8 @@ fun RiderApp(vm: RiderAppViewModel) {
   val backStack by navController.currentBackStackEntryAsState()
   val destination = backStack?.destination
   val route = destination?.route.orEmpty()
-  val showBottomBar = ui.session != null && route in rootRoutes
-  val showHeader = ui.session != null && route != RiderRoute.Login.route
+  val showBottomBar = !ui.showSplash && ui.session != null && route in rootRoutes
+  val showHeader = !ui.showSplash && ui.session != null && route != RiderRoute.Login.route
 
   Scaffold(
     bottomBar = {
@@ -201,11 +209,15 @@ fun RiderApp(vm: RiderAppViewModel) {
 
       NavHost(
         navController = navController,
-        startDestination = RiderRoute.Login.route,
+        startDestination = RiderRoute.Splash.route,
         modifier = Modifier
           .fillMaxSize()
           .padding(horizontal = 12.dp, vertical = 10.dp),
       ) {
+        composable(RiderRoute.Splash.route) {
+          SplashScreen()
+        }
+
         composable(RiderRoute.Login.route) {
           LoginScreen(
             riderMode = ui.riderMode,
@@ -227,12 +239,15 @@ fun RiderApp(vm: RiderAppViewModel) {
             orders = ui.orders,
             startedOrderIds = ui.startedOrderIds,
             selectedTab = ui.dispatchTab,
+            shiftStatus = ui.shiftStatus,
+            isSyncingShiftStatus = ui.isSyncingShiftStatus,
             queueError = ui.queueError,
             onTabChange = vm::setDispatchTab,
             onStartDelivery = { order ->
               vm.startDelivery(order.id)
               navController.navigate(RiderRoute.ActiveDelivery.create(order.id))
             },
+            onToggleShift = vm::toggleShiftStatus,
           )
         }
 
@@ -329,6 +344,34 @@ fun RiderApp(vm: RiderAppViewModel) {
             onBack = { navController.popBackStack() },
           )
         }
+      }
+    }
+  }
+}
+
+@Composable
+private fun SplashScreen() {
+  Box(
+    modifier = Modifier.fillMaxSize(),
+  ) {
+    PremiumCard(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(top = 70.dp),
+    ) {
+      Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        Text(
+          text = "Unilove Rider",
+          style = MaterialTheme.typography.headlineMedium,
+          fontWeight = FontWeight.ExtraBold,
+        )
+        Text(
+          text = "Preparing secure dispatch workspace...",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
       }
     }
   }

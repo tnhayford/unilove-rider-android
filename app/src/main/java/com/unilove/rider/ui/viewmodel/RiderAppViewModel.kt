@@ -32,6 +32,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
 data class RiderAppUiState(
+  val showSplash: Boolean = true,
   val isOnline: Boolean = true,
   val isAuthenticating: Boolean = false,
   val riderMode: RiderLoginMode = RiderLoginMode.STAFF,
@@ -60,7 +61,7 @@ data class RiderAppUiState(
   val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
   val ringtone: RingtoneOption = RingtoneOption.PREMIUM_CHIME,
   val notificationToneUri: String? = null,
-  val shiftStatus: ShiftStatus = ShiftStatus.ONLINE,
+  val shiftStatus: ShiftStatus = ShiftStatus.OFFLINE,
   val otpCompletedOrderId: String? = null,
   val pendingNavigationOrderId: String? = null,
   val pendingNavigationToActive: Boolean = false,
@@ -83,6 +84,10 @@ class RiderAppViewModel(
   private var autoRefreshJob: Job? = null
 
   init {
+    viewModelScope.launch {
+      delay(1100)
+      _ui.value = _ui.value.copy(showSplash = false)
+    }
     observeAppState()
   }
 
@@ -102,7 +107,6 @@ class RiderAppViewModel(
         )
         if (session != null) {
           startAutoRefresh()
-          refreshOrders(silent = true)
           syncPendingIncidents()
           registerFcmToken(session)
         } else {
@@ -204,7 +208,9 @@ class RiderAppViewModel(
     if (autoRefreshJob != null) return
     autoRefreshJob = viewModelScope.launch {
       while (true) {
-        refreshOrders(silent = true)
+        if (_ui.value.session != null && _ui.value.shiftStatus == ShiftStatus.ONLINE) {
+          refreshOrders(silent = true)
+        }
         delay(15000)
       }
     }
@@ -264,10 +270,15 @@ class RiderAppViewModel(
             isAuthenticating = false,
             pinInput = "",
             authError = null,
+            shiftStatus = ShiftStatus.OFFLINE,
             profileStatusMessage = null,
             profileError = null,
           )
-          refreshOrders(silent = true)
+          repository.updateShiftStatus(
+            session = it,
+            status = ShiftStatus.OFFLINE,
+            note = "Shift starts offline until rider goes online",
+          )
         }
         .onFailure { err ->
           _ui.value = _ui.value.copy(
@@ -533,7 +544,9 @@ class RiderAppViewModel(
           profileStatusMessage = if (updatedStatus == ShiftStatus.ONLINE) "Shift is online." else "Shift is offline.",
           profileError = null,
         )
-        refreshOrders(silent = true)
+        if (updatedStatus == ShiftStatus.ONLINE) {
+          refreshOrders(silent = true)
+        }
       }.onFailure { err ->
         _ui.value = _ui.value.copy(
           isSyncingShiftStatus = false,

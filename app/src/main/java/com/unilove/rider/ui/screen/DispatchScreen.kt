@@ -50,6 +50,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.unilove.rider.model.DeliveryStatus
 import com.unilove.rider.model.DispatchListTab
 import com.unilove.rider.model.DispatchOrder
+import com.unilove.rider.model.ShiftStatus
 import com.unilove.rider.model.isActive
 import com.unilove.rider.ui.design.NotificationPermissionCard
 import com.unilove.rider.ui.design.PremiumCard
@@ -63,9 +64,12 @@ fun DispatchScreen(
   orders: List<DispatchOrder>,
   startedOrderIds: Set<String>,
   selectedTab: DispatchListTab,
+  shiftStatus: ShiftStatus,
+  isSyncingShiftStatus: Boolean,
   queueError: String?,
   onTabChange: (DispatchListTab) -> Unit,
   onStartDelivery: (DispatchOrder) -> Unit,
+  onToggleShift: () -> Unit,
 ) {
   val context = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
@@ -101,6 +105,41 @@ fun DispatchScreen(
       .padding(bottom = 10.dp),
     verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
+    val shiftOnline = shiftStatus == ShiftStatus.ONLINE
+    PremiumCard(modifier = Modifier.fillMaxWidth()) {
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+          text = if (shiftOnline) "You are online for dispatch." else "You are offline.",
+          style = MaterialTheme.typography.titleMedium,
+          fontWeight = FontWeight.Bold,
+        )
+        Text(
+          text = if (shiftOnline) {
+            "Tap Go Offline when ending your shift."
+          } else {
+            "Tap Go Online to start receiving assigned orders."
+          },
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(
+          onClick = onToggleShift,
+          enabled = !isSyncingShiftStatus,
+          modifier = Modifier.fillMaxWidth(),
+        ) {
+          Text(
+            if (isSyncingShiftStatus) {
+              "Updating..."
+            } else if (shiftOnline) {
+              "Go Offline"
+            } else {
+              "Go Online"
+            },
+          )
+        }
+      }
+    }
+
     val notificationsReady = notificationsEnabled && notificationPermissionGranted
     val shouldRequestPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationPermissionGranted
     if (!notificationsReady) {
@@ -138,14 +177,20 @@ fun DispatchScreen(
     }
 
     AnimatedContent(targetState = selectedTab, label = "dispatchTabContent") { tab ->
-      val tabItems = when (tab) {
-        DispatchListTab.NEW_ORDERS -> orders.filter { it.status.isActive() && it.id !in startedOrderIds }
-        DispatchListTab.ACTIVE_DELIVERIES -> orders.filter { it.status.isActive() && it.id in startedOrderIds }
+      val tabItems = if (!shiftOnline) {
+        emptyList()
+      } else {
+        when (tab) {
+          DispatchListTab.NEW_ORDERS -> orders.filter { it.status.isActive() && it.id !in startedOrderIds }
+          DispatchListTab.ACTIVE_DELIVERIES -> orders.filter { it.status.isActive() && it.id in startedOrderIds }
+        }
       }
       if (tabItems.isEmpty()) {
         PremiumCard(modifier = Modifier.fillMaxWidth()) {
           Text(
-            text = if (tab == DispatchListTab.NEW_ORDERS) {
+            text = if (!shiftOnline) {
+              "Shift is offline. Go online to load dispatch orders."
+            } else if (tab == DispatchListTab.NEW_ORDERS) {
               "No new orders assigned right now."
             } else {
               "No active deliveries right now."
