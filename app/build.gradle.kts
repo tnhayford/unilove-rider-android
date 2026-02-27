@@ -21,8 +21,8 @@ android {
     applicationId = "com.unilove.rider"
     minSdk = 26
     targetSdk = 35
-    versionCode = 15
-    versionName = "1.8.0"
+    versionCode = 16
+    versionName = "1.8.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     vectorDrawables.useSupportLibrary = true
@@ -112,6 +112,7 @@ dependencies {
   implementation("androidx.compose.material3:material3:1.3.1")
   implementation("androidx.compose.material:material-icons-extended")
   implementation("com.google.android.material:material:1.12.0")
+  implementation("io.coil-kt:coil-compose:2.7.0")
 
   implementation("androidx.datastore:datastore-preferences:1.1.2")
   implementation("androidx.security:security-crypto-ktx:1.1.0-alpha06")

@@ -8,6 +8,11 @@ import retrofit2.http.POST
 import retrofit2.http.Query
 
 interface RiderApi {
+  @POST("api/rider/auth/request-otp")
+  suspend fun requestOtp(
+    @Body payload: RiderOtpRequest,
+  ): ApiEnvelope<RiderOtpResponse>
+
   @POST("api/rider/auth/login")
   suspend fun login(
     @Body payload: RiderLoginRequest,

@@ -4,6 +4,7 @@ import com.unilove.rider.BuildConfig
 import com.unilove.rider.data.api.DeliveryVerifyRequest
 import com.unilove.rider.data.api.NetworkModule
 import com.unilove.rider.data.api.RegisterDeviceTokenRequest
+import com.unilove.rider.data.api.RiderOtpRequest
 import com.unilove.rider.data.api.RiderCashCollectionRequest
 import com.unilove.rider.data.api.RiderIncidentRequest
 import com.unilove.rider.data.api.RiderLoginRequest
@@ -45,6 +46,12 @@ import java.net.UnknownHostException
 import java.time.Instant
 import java.util.UUID
 
+data class LoginOtpChallenge(
+  val requestId: String,
+  val phoneMasked: String,
+  val expiresInSeconds: Int,
+)
+
 class StaffAppRepository(
   private val sessionStore: SessionStore,
   private val queueCacheDao: QueueCacheDao,
@@ -71,16 +78,18 @@ class StaffAppRepository(
     riderName: String?,
   ): Result<RiderSessionModel> {
     return runCatching {
-      val normalizedRiderId = riderId.trim()
-      val normalizedPin = pin.trim()
+      val normalizedPhone = riderId.trim()
+      val normalizedOtp = pin.trim()
       val modeValue = if (mode == RiderLoginMode.GUEST) "guest" else "staff"
       val api = NetworkModule.riderApi(baseUrl)
       val response = api.login(
         RiderLoginRequest(
           mode = modeValue,
-          riderId = normalizedRiderId.ifBlank { "guest" },
+          phone = normalizedPhone,
+          otpCode = normalizedOtp,
+          requestId = null,
           riderName = riderName?.trim()?.takeIf { it.isNotBlank() },
-          pin = if (mode == RiderLoginMode.GUEST) null else normalizedPin,
+          referralCode = null,
           platform = "android",
         ),
       )
@@ -89,6 +98,7 @@ class StaffAppRepository(
       val model = RiderSessionModel(
         riderId = data.rider.id,
         riderName = data.rider.fullName,
+        riderPhone = data.rider.phone.orEmpty(),
         authToken = data.token,
         authenticatedAtEpochMs = System.currentTimeMillis(),
         riderMode = resolvedMode,
@@ -96,12 +106,10 @@ class StaffAppRepository(
       sessionStore.saveSession(
         riderId = model.riderId,
         riderName = model.riderName,
+        riderPhone = model.riderPhone,
         authToken = model.authToken,
         riderMode = model.riderMode,
       )
-      if (resolvedMode == RiderLoginMode.STAFF && normalizedRiderId.isNotBlank() && normalizedPin.isNotBlank()) {
-        sessionStore.saveOfflinePin(riderId = normalizedRiderId, pin = normalizedPin)
-      }
       sessionStore.saveShiftStatus(ShiftStatus.OFFLINE)
       model
     }.mapKnownErrors(defaultMessage = "Unable to sign in. Please try again.")
@@ -112,21 +120,79 @@ class StaffAppRepository(
     pin: String,
     mode: RiderLoginMode,
   ): Result<RiderSessionModel> {
+    return Result.failure(
+      IllegalStateException("Offline login is disabled. Connect to receive OTP."),
+    )
+  }
+
+  suspend fun requestLoginOtp(
+    phone: String,
+    mode: RiderLoginMode,
+    riderName: String?,
+    referralCode: String?,
+  ): Result<LoginOtpChallenge> {
     return runCatching {
-      if (mode == RiderLoginMode.GUEST) {
-        throw IllegalStateException("Guest login requires internet connection.")
-      }
-      val cached = sessionStore.getSessionModel()
-        ?: throw IllegalStateException("Offline login unavailable. Connect once to authenticate.")
-      if (cached.riderMode == RiderLoginMode.GUEST) {
-        throw IllegalStateException("Offline login is unavailable for guest rider mode.")
-      }
-      if (!sessionStore.canLoginOffline(riderId, pin)) {
-        throw IllegalStateException("Invalid offline PIN for this rider.")
-      }
+      val modeValue = if (mode == RiderLoginMode.GUEST) "guest" else "staff"
+      val api = NetworkModule.riderApi(baseUrl)
+      val response = api.requestOtp(
+        RiderOtpRequest(
+          mode = modeValue,
+          phone = phone.trim(),
+          riderName = riderName?.trim()?.takeIf { it.isNotBlank() },
+          referralCode = referralCode?.trim()?.takeIf { it.isNotBlank() },
+        ),
+      )
+      val data = response.data ?: throw IllegalStateException(response.error ?: "Unable to request OTP")
+      LoginOtpChallenge(
+        requestId = data.requestId,
+        phoneMasked = data.phoneMasked.orEmpty().ifBlank { maskPhone(phone) },
+        expiresInSeconds = data.expiresInSeconds,
+      )
+    }.mapKnownErrors(defaultMessage = "Unable to request OTP.")
+  }
+
+  suspend fun verifyLoginOtp(
+    phone: String,
+    otpCode: String,
+    requestId: String,
+    mode: RiderLoginMode,
+    riderName: String?,
+    referralCode: String?,
+  ): Result<RiderSessionModel> {
+    return runCatching {
+      val modeValue = if (mode == RiderLoginMode.GUEST) "guest" else "staff"
+      val api = NetworkModule.riderApi(baseUrl)
+      val response = api.login(
+        RiderLoginRequest(
+          mode = modeValue,
+          phone = phone.trim(),
+          otpCode = otpCode.trim(),
+          requestId = requestId.trim(),
+          riderName = riderName?.trim()?.takeIf { it.isNotBlank() },
+          referralCode = referralCode?.trim()?.takeIf { it.isNotBlank() },
+          platform = "android",
+        ),
+      )
+      val data = response.data ?: throw IllegalStateException(response.error ?: "Unable to sign in")
+      val resolvedMode = data.rider.mode.toRiderLoginMode(defaultMode = mode)
+      val model = RiderSessionModel(
+        riderId = data.rider.id,
+        riderName = data.rider.fullName,
+        riderPhone = data.rider.phone.orEmpty(),
+        authToken = data.token,
+        authenticatedAtEpochMs = System.currentTimeMillis(),
+        riderMode = resolvedMode,
+      )
+      sessionStore.saveSession(
+        riderId = model.riderId,
+        riderName = model.riderName,
+        riderPhone = model.riderPhone,
+        authToken = model.authToken,
+        riderMode = model.riderMode,
+      )
       sessionStore.saveShiftStatus(ShiftStatus.OFFLINE)
-      cached
-    }
+      model
+    }.mapKnownErrors(defaultMessage = "Unable to verify OTP.")
   }
 
   override suspend fun logout() {

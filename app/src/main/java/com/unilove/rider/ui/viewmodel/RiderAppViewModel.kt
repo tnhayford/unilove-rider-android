@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.google.android.gms.tasks.Task
 import com.google.firebase.messaging.FirebaseMessaging
 import com.unilove.rider.data.repo.StaffAppRepository
-import com.unilove.rider.domain.usecase.LoginRiderUseCase
 import com.unilove.rider.domain.usecase.RefreshQueueUseCase
 import com.unilove.rider.model.AppThemeMode
 import com.unilove.rider.model.DeliveryMetrics
@@ -32,14 +31,24 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
+enum class RiderAuthStep {
+  ENTER_PHONE,
+  VERIFY_OTP,
+}
+
 data class RiderAppUiState(
   val showSplash: Boolean = true,
   val isOnline: Boolean = true,
   val isAuthenticating: Boolean = false,
   val riderMode: RiderLoginMode = RiderLoginMode.STAFF,
-  val riderIdInput: String = "",
+  val authStep: RiderAuthStep = RiderAuthStep.ENTER_PHONE,
+  val riderPhoneInput: String = "",
   val guestNameInput: String = "",
-  val pinInput: String = "",
+  val referralCodeInput: String = "",
+  val loginOtpInput: String = "",
+  val otpRequestId: String = "",
+  val otpPhoneMasked: String = "",
+  val otpExpiresInSeconds: Int = 0,
   val authError: String? = null,
   val session: RiderSessionModel? = null,
   val dispatchTab: DispatchListTab = DispatchListTab.NEW_ORDERS,
@@ -79,7 +88,6 @@ class RiderAppViewModel(
   private val networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
-  private val loginUseCase = LoginRiderUseCase(authRepository = repository)
   private val refreshQueueUseCase = RefreshQueueUseCase(dispatchRepository = repository)
 
   private val _ui = MutableStateFlow(RiderAppUiState())
@@ -220,68 +228,76 @@ class RiderAppViewModel(
     }
   }
 
-  fun setRiderIdInput(value: String) {
-    _ui.value = _ui.value.copy(riderIdInput = value, authError = null)
+  fun setRiderPhoneInput(value: String) {
+    _ui.value = _ui.value.copy(
+      riderPhoneInput = value.filter { it.isDigit() }.take(15),
+      authError = null,
+    )
   }
 
   fun setGuestNameInput(value: String) {
     _ui.value = _ui.value.copy(guestNameInput = value, authError = null)
   }
 
-  fun setRiderMode(mode: RiderLoginMode) {
+  fun setReferralCodeInput(value: String) {
     _ui.value = _ui.value.copy(
-      riderMode = mode,
+      referralCodeInput = value.uppercase().replace(" ", "").take(24),
       authError = null,
-      pinInput = if (mode == RiderLoginMode.GUEST) "" else _ui.value.pinInput,
     )
   }
 
-  fun setPinInput(value: String) {
-    _ui.value = _ui.value.copy(pinInput = value.take(8), authError = null)
+  fun setRiderMode(mode: RiderLoginMode) {
+    _ui.value = _ui.value.copy(
+      riderMode = mode,
+      authStep = RiderAuthStep.ENTER_PHONE,
+      authError = null,
+      loginOtpInput = "",
+      otpRequestId = "",
+      otpPhoneMasked = "",
+      otpExpiresInSeconds = 0,
+      referralCodeInput = if (mode == RiderLoginMode.GUEST) _ui.value.referralCodeInput else "",
+    )
   }
 
-  fun login() {
-    val riderMode = _ui.value.riderMode
-    val riderId = _ui.value.riderIdInput.trim()
-    val guestName = _ui.value.guestNameInput.trim()
-    val pin = _ui.value.pinInput.trim()
+  fun setLoginOtpInput(value: String) {
+    _ui.value = _ui.value.copy(
+      loginOtpInput = value.filter { it.isDigit() }.take(6),
+      authError = null,
+    )
+  }
 
-    if (riderMode == RiderLoginMode.STAFF) {
-      if (riderId.isBlank()) {
-        _ui.value = _ui.value.copy(authError = "Rider ID is required")
-        return
-      }
-      if (pin.length < 4) {
-        _ui.value = _ui.value.copy(authError = "Enter a valid PIN")
-        return
-      }
-    } else if (guestName.isBlank() && riderId.isBlank()) {
-      _ui.value = _ui.value.copy(authError = "Enter guest name or alias")
+  fun requestLoginOtp() {
+    val riderMode = _ui.value.riderMode
+    val phone = _ui.value.riderPhoneInput.trim()
+    val guestName = _ui.value.guestNameInput.trim()
+    val referralCode = _ui.value.referralCodeInput.trim()
+
+    if (phone.length < 10) {
+      _ui.value = _ui.value.copy(authError = "Enter a valid phone number")
+      return
+    }
+    if (riderMode == RiderLoginMode.GUEST && referralCode.isBlank()) {
+      _ui.value = _ui.value.copy(authError = "Referral code is required for guest riders")
       return
     }
 
     viewModelScope.launch {
       _ui.value = _ui.value.copy(isAuthenticating = true, authError = null)
-      loginUseCase(
-        riderId = riderId,
-        pin = pin,
+      repository.requestLoginOtp(
+        phone = phone,
         mode = riderMode,
         riderName = guestName.ifBlank { null },
-        offlineAllowed = riderMode == RiderLoginMode.STAFF,
+        referralCode = referralCode.ifBlank { null },
       )
         .onSuccess {
           _ui.value = _ui.value.copy(
             isAuthenticating = false,
-            pinInput = "",
+            authStep = RiderAuthStep.VERIFY_OTP,
+            loginOtpInput = "",
+            otpRequestId = it.requestId,
+            otpPhoneMasked = it.phoneMasked,
+            otpExpiresInSeconds = it.expiresInSeconds,
             authError = null,
-            shiftStatus = ShiftStatus.OFFLINE,
-            profileStatusMessage = null,
-            profileError = null,
-          )
-          repository.updateShiftStatus(
-            session = it,
-            status = ShiftStatus.OFFLINE,
-            note = "Shift starts offline until rider goes online",
           )
         }
         .onFailure { err ->
@@ -291,6 +307,71 @@ class RiderAppViewModel(
           )
         }
     }
+  }
+
+  fun verifyLoginOtp() {
+    val riderMode = _ui.value.riderMode
+    val phone = _ui.value.riderPhoneInput.trim()
+    val guestName = _ui.value.guestNameInput.trim()
+    val referralCode = _ui.value.referralCodeInput.trim()
+    val otpCode = _ui.value.loginOtpInput.trim()
+    val requestId = _ui.value.otpRequestId.trim()
+
+    if (requestId.isBlank()) {
+      _ui.value = _ui.value.copy(authError = "Request OTP first.")
+      return
+    }
+    if (otpCode.length != 6) {
+      _ui.value = _ui.value.copy(authError = "Enter the 6-digit OTP")
+      return
+    }
+
+    viewModelScope.launch {
+      _ui.value = _ui.value.copy(isAuthenticating = true, authError = null)
+      repository.verifyLoginOtp(
+        phone = phone,
+        otpCode = otpCode,
+        requestId = requestId,
+        mode = riderMode,
+        riderName = guestName.ifBlank { null },
+        referralCode = referralCode.ifBlank { null },
+      ).onSuccess {
+        _ui.value = _ui.value.copy(
+          isAuthenticating = false,
+          authStep = RiderAuthStep.ENTER_PHONE,
+          loginOtpInput = "",
+          otpRequestId = "",
+          otpPhoneMasked = "",
+          otpExpiresInSeconds = 0,
+          referralCodeInput = if (riderMode == RiderLoginMode.GUEST) referralCode else "",
+          authError = null,
+          shiftStatus = ShiftStatus.OFFLINE,
+          profileStatusMessage = null,
+          profileError = null,
+        )
+        repository.updateShiftStatus(
+          session = it,
+          status = ShiftStatus.OFFLINE,
+          note = "Shift starts offline until rider goes online",
+        )
+      }.onFailure { err ->
+        _ui.value = _ui.value.copy(
+          isAuthenticating = false,
+          authError = err.message ?: "Unable to verify OTP",
+        )
+      }
+    }
+  }
+
+  fun backToPhoneEntry() {
+    _ui.value = _ui.value.copy(
+      authStep = RiderAuthStep.ENTER_PHONE,
+      loginOtpInput = "",
+      otpRequestId = "",
+      otpPhoneMasked = "",
+      otpExpiresInSeconds = 0,
+      authError = null,
+    )
   }
 
   fun logout() {
@@ -306,11 +387,15 @@ class RiderAppViewModel(
         .onSuccess {
           _ui.value = _ui.value.copy(
             isSyncingShiftStatus = false,
-            pinInput = "",
+            authStep = RiderAuthStep.ENTER_PHONE,
             dispatchTab = DispatchListTab.NEW_ORDERS,
             selectedOrderId = null,
             startedOrderIds = emptySet(),
             arrivedOrderIds = emptySet(),
+            loginOtpInput = "",
+            otpRequestId = "",
+            otpPhoneMasked = "",
+            otpExpiresInSeconds = 0,
             otpCode = "",
             otpError = null,
             otpMessage = null,

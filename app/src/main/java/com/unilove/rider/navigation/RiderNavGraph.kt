@@ -11,10 +11,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DirectionsBike
@@ -34,11 +37,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -58,7 +65,10 @@ import com.unilove.rider.ui.screen.OtpConfirmationScreen
 import com.unilove.rider.ui.screen.PerformanceScreen
 import com.unilove.rider.ui.screen.ProfileScreen
 import com.unilove.rider.ui.screen.SettingsScreen
+import com.unilove.rider.ui.viewmodel.RiderAuthStep
 import com.unilove.rider.ui.viewmodel.RiderAppViewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 
 sealed class RiderRoute(val route: String) {
   data object Splash : RiderRoute("splash")
@@ -220,17 +230,24 @@ fun RiderApp(vm: RiderAppViewModel) {
 
         composable(RiderRoute.Login.route) {
           LoginScreen(
+            authStep = ui.authStep,
             riderMode = ui.riderMode,
-            riderId = ui.riderIdInput,
+            riderPhone = ui.riderPhoneInput,
             guestName = ui.guestNameInput,
-            pin = ui.pinInput,
+            referralCode = ui.referralCodeInput,
+            otp = ui.loginOtpInput,
+            otpPhoneMasked = ui.otpPhoneMasked,
+            otpExpiresInSeconds = ui.otpExpiresInSeconds,
             loading = ui.isAuthenticating,
             error = ui.authError,
             onModeChange = vm::setRiderMode,
-            onRiderIdChange = vm::setRiderIdInput,
+            onPhoneChange = vm::setRiderPhoneInput,
             onGuestNameChange = vm::setGuestNameInput,
-            onPinChange = vm::setPinInput,
-            onLogin = vm::login,
+            onReferralCodeChange = vm::setReferralCodeInput,
+            onOtpChange = vm::setLoginOtpInput,
+            onRequestOtp = vm::requestLoginOtp,
+            onVerifyOtp = vm::verifyLoginOtp,
+            onBackToPhone = vm::backToPhoneEntry,
           )
         }
 
@@ -355,24 +372,45 @@ fun RiderApp(vm: RiderAppViewModel) {
 
 @Composable
 private fun SplashScreen() {
+  val context = LocalContext.current
+  val splashImageUrl = "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1400&q=80"
   Box(
     modifier = Modifier.fillMaxSize(),
+    contentAlignment = Alignment.TopCenter,
   ) {
     PremiumCard(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(top = 70.dp),
+        .padding(top = 36.dp),
     ) {
       Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
       ) {
+        AsyncImage(
+          model = ImageRequest.Builder(context)
+            .data(splashImageUrl)
+            .crossfade(true)
+            .build(),
+          contentDescription = "Rider preparing delivery bike",
+          contentScale = ContentScale.Crop,
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(240.dp)
+            .clip(RoundedCornerShape(16.dp)),
+        )
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
           text = "Unilove Rider",
           style = MaterialTheme.typography.headlineMedium,
           fontWeight = FontWeight.ExtraBold,
         )
         Text(
-          text = "Preparing secure dispatch workspace...",
+          text = "Fast, secure delivery operations",
+          style = MaterialTheme.typography.titleMedium,
+          fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+          text = "Loading your shift workspace...",
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

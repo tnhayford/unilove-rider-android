@@ -27,6 +27,7 @@ enum class RiderLoginMode {
 data class RiderSessionModel(
   val riderId: String,
   val riderName: String,
+  val riderPhone: String = "",
   val authToken: String,
   val authenticatedAtEpochMs: Long,
   val riderMode: RiderLoginMode = RiderLoginMode.STAFF,

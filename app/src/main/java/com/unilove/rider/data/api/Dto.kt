@@ -61,18 +61,37 @@ data class RiderCashCollectionResponse(
 @Serializable
 data class RiderLoginRequest(
   val mode: String = "staff",
-  val riderId: String,
+  val phone: String,
+  val otpCode: String,
+  val requestId: String? = null,
   val riderName: String? = null,
-  val pin: String? = null,
+  val referralCode: String? = null,
   val fcmToken: String? = null,
   val deviceId: String? = null,
   val platform: String = "android",
 )
 
 @Serializable
+data class RiderOtpRequest(
+  val mode: String = "staff",
+  val phone: String,
+  val riderName: String? = null,
+  val referralCode: String? = null,
+)
+
+@Serializable
+data class RiderOtpResponse(
+  val requestId: String,
+  val mode: String? = null,
+  @SerialName("phoneMasked") val phoneMasked: String? = null,
+  @SerialName("expiresInSeconds") val expiresInSeconds: Int,
+)
+
+@Serializable
 data class RiderProfileDto(
   val id: String,
   @SerialName("fullName") val fullName: String,
+  val phone: String? = null,
   val mode: String? = null,
 )
 

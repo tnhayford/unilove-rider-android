@@ -19,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.unilove.rider.BuildConfig
 import com.unilove.rider.model.RiderSessionModel
 import com.unilove.rider.model.ShiftStatus
 import com.unilove.rider.ui.design.PremiumCard
@@ -47,6 +46,14 @@ fun ProfileScreen(
       Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(session.riderName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
         Text("Rider ID: ${session.riderId}", style = MaterialTheme.typography.bodyMedium)
+        if (session.riderPhone.isNotBlank()) {
+          Text("Phone: ${session.riderPhone}", style = MaterialTheme.typography.bodyMedium)
+        }
+        Text(
+          "Mode: ${if (session.riderMode.name == "GUEST") "Guest" else "Staff"}",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text("Support: Unilove Operations", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
     }
@@ -110,11 +117,5 @@ fun ProfileScreen(
       androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Log out")
       Text(" Log Out")
     }
-
-    Text(
-      text = "Version ${BuildConfig.VERSION_NAME}",
-      style = MaterialTheme.typography.labelSmall,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
   }
 }

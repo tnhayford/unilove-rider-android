@@ -244,6 +244,27 @@ fun SettingsScreen(
       }
     }
 
+    PremiumCard(modifier = Modifier.fillMaxWidth()) {
+      Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("System Info", fontWeight = FontWeight.Bold)
+        Text(
+          text = "Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+          text = "Build: ${BuildConfig.BUILD_TYPE}",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+          text = "Server: ${BuildConfig.BASE_URL}",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+    }
+
     OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
       Text("Done")
     }

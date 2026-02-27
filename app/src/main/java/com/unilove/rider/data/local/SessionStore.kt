@@ -54,12 +54,14 @@ class SessionStore(context: Context) {
   suspend fun saveSession(
     riderId: String,
     riderName: String,
+    riderPhone: String = "",
     authToken: String,
     riderMode: RiderLoginMode = RiderLoginMode.STAFF,
   ) {
     prefs.edit()
       .putString(KEY_RIDER_ID, riderId)
       .putString(KEY_RIDER_NAME, riderName)
+      .putString(KEY_RIDER_PHONE, riderPhone.trim())
       .putString(KEY_AUTH_TOKEN, authToken)
       .putString(KEY_RIDER_MODE, riderMode.name)
       .putLong(KEY_AUTH_AT, System.currentTimeMillis())
@@ -143,6 +145,7 @@ class SessionStore(context: Context) {
   private fun readSessionModel(): RiderSessionModel? {
     val riderId = prefs.getString(KEY_RIDER_ID, "").orEmpty()
     val riderName = prefs.getString(KEY_RIDER_NAME, "").orEmpty()
+    val riderPhone = prefs.getString(KEY_RIDER_PHONE, "").orEmpty()
     val authToken = prefs.getString(KEY_AUTH_TOKEN, "").orEmpty()
     val riderModeRaw = prefs.getString(KEY_RIDER_MODE, RiderLoginMode.STAFF.name).orEmpty()
     val riderMode = runCatching { RiderLoginMode.valueOf(riderModeRaw) }.getOrElse { RiderLoginMode.STAFF }
@@ -152,6 +155,7 @@ class SessionStore(context: Context) {
     return RiderSessionModel(
       riderId = riderId,
       riderName = riderName,
+      riderPhone = riderPhone,
       authToken = authToken,
       authenticatedAtEpochMs = authAt,
       riderMode = riderMode,
@@ -195,6 +199,7 @@ class SessionStore(context: Context) {
 
     private const val KEY_RIDER_ID = "rider_id"
     private const val KEY_RIDER_NAME = "rider_name"
+    private const val KEY_RIDER_PHONE = "rider_phone"
     private const val KEY_AUTH_TOKEN = "auth_token"
     private const val KEY_RIDER_MODE = "rider_mode"
     private const val KEY_AUTH_AT = "auth_at"
