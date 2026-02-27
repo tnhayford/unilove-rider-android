@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.PinDrop
 import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -27,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.unilove.rider.model.DispatchPaymentStatus
 import com.unilove.rider.model.DispatchOrder
 import com.unilove.rider.ui.design.PremiumCard
 import com.unilove.rider.ui.design.StatusBadge
@@ -35,7 +37,11 @@ import com.unilove.rider.ui.design.StatusBadge
 fun ActiveDeliveryScreen(
   order: DispatchOrder?,
   arrived: Boolean,
+  isConfirmingCollection: Boolean,
+  collectionMessage: String?,
+  collectionError: String?,
   onArrived: () -> Unit,
+  onConfirmCollection: () -> Unit,
   onMarkDelivered: () -> Unit,
 ) {
   val context = LocalContext.current
@@ -74,6 +80,10 @@ fun ActiveDeliveryScreen(
       Toast.makeText(context, "No map app available", Toast.LENGTH_SHORT).show()
     }
   }
+
+  val collectionCompleted = !order.requiresCollection ||
+    order.paymentStatus == DispatchPaymentStatus.PAID ||
+    order.amountDueCedis <= 0
 
   Column(
     modifier = Modifier
@@ -118,6 +128,53 @@ fun ActiveDeliveryScreen(
 
     PremiumCard(modifier = Modifier.fillMaxWidth()) {
       Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (order.requiresCollection && !collectionCompleted) {
+          Text(
+            text = "Collect GHS ${formatMoney(order.amountDueCedis)} from customer before OTP verification.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+            fontWeight = FontWeight.SemiBold,
+          )
+          Button(
+            onClick = onConfirmCollection,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isConfirmingCollection,
+          ) {
+            androidx.compose.material3.Icon(Icons.Default.Payments, contentDescription = "Confirm collection")
+            Text(if (isConfirmingCollection) " Confirming payment..." else " I Have Collected Payment")
+          }
+        } else if (order.requiresCollection) {
+          Text(
+            text = "Payment confirmed. Proceed with OTP handover.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.tertiary,
+            fontWeight = FontWeight.SemiBold,
+          )
+        } else {
+          Text(
+            text = "No cash collection required for this order.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+
+        if (!collectionMessage.isNullOrBlank()) {
+          Text(
+            text = collectionMessage,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.tertiary,
+            fontWeight = FontWeight.SemiBold,
+          )
+        }
+
+        if (!collectionError.isNullOrBlank()) {
+          Text(
+            text = collectionError,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+          )
+        }
+
         Button(
           onClick = onArrived,
           modifier = Modifier.fillMaxWidth(),
@@ -129,10 +186,10 @@ fun ActiveDeliveryScreen(
         Button(
           onClick = onMarkDelivered,
           modifier = Modifier.fillMaxWidth(),
-          enabled = arrived,
+          enabled = arrived && collectionCompleted,
         ) {
           androidx.compose.material3.Icon(Icons.Default.TaskAlt, contentDescription = "Mark delivered")
-          Text(" Mark Delivered")
+          Text(" Proceed to OTP")
         }
 
         if (!arrived) {
@@ -140,6 +197,13 @@ fun ActiveDeliveryScreen(
             text = "Mark arrival first before OTP delivery confirmation.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        if (arrived && !collectionCompleted) {
+          Text(
+            text = "Confirm payment collection before moving to OTP.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
           )
         }
       }

@@ -25,6 +25,12 @@ interface RiderApi {
     @Body payload: DeliveryVerifyRequest,
   ): ApiEnvelope<DeliveryVerifyResponse>
 
+  @POST("api/rider/orders/collection")
+  suspend fun confirmCashCollection(
+    @Header("Authorization") authorization: String,
+    @Body payload: RiderCashCollectionRequest,
+  ): ApiEnvelope<RiderCashCollectionResponse>
+
   @POST("api/rider/devices/token")
   suspend fun registerDeviceToken(
     @Header("Authorization") authorization: String,

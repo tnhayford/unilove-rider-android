@@ -265,7 +265,11 @@ fun RiderApp(vm: RiderAppViewModel) {
           ActiveDeliveryScreen(
             order = order,
             arrived = arrived,
+            isConfirmingCollection = ui.isConfirmingCollection,
+            collectionMessage = ui.collectionMessage,
+            collectionError = ui.collectionError,
             onArrived = { vm.markArrived(orderId) },
+            onConfirmCollection = { vm.confirmCashCollection(orderId) },
             onMarkDelivered = { navController.navigate(RiderRoute.Otp.create(orderId)) },
           )
         }

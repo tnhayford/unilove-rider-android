@@ -12,6 +12,7 @@ import com.unilove.rider.model.AppThemeMode
 import com.unilove.rider.model.DeliveryMetrics
 import com.unilove.rider.model.DispatchListTab
 import com.unilove.rider.model.DispatchOrder
+import com.unilove.rider.model.DispatchPaymentStatus
 import com.unilove.rider.model.IncidentCategory
 import com.unilove.rider.model.IncidentDraft
 import com.unilove.rider.model.IncidentRecord
@@ -52,6 +53,9 @@ data class RiderAppUiState(
   val otpMessage: String? = null,
   val otpError: String? = null,
   val isVerifyingOtp: Boolean = false,
+  val isConfirmingCollection: Boolean = false,
+  val collectionMessage: String? = null,
+  val collectionError: String? = null,
   val metrics: DeliveryMetrics = DeliveryMetrics(0, 0, 0, List(7) { 0 }),
   val incidents: List<IncidentRecord> = emptyList(),
   val incidentDraft: IncidentDraft = IncidentDraft(),
@@ -310,6 +314,9 @@ class RiderAppViewModel(
             otpCode = "",
             otpError = null,
             otpMessage = null,
+            isConfirmingCollection = false,
+            collectionMessage = null,
+            collectionError = null,
             otpCompletedOrderId = null,
             pendingNavigationOrderId = null,
             pendingNavigationToActive = false,
@@ -355,7 +362,11 @@ class RiderAppViewModel(
   }
 
   fun openOrder(orderId: String) {
-    _ui.value = _ui.value.copy(selectedOrderId = orderId)
+    _ui.value = _ui.value.copy(
+      selectedOrderId = orderId,
+      collectionMessage = null,
+      collectionError = null,
+    )
   }
 
   fun startDelivery(orderId: String) {
@@ -366,6 +377,8 @@ class RiderAppViewModel(
       startedOrderIds = nextStarted,
       arrivedOrderIds = nextArrived,
       dispatchTab = DispatchListTab.ACTIVE_DELIVERIES,
+      collectionMessage = null,
+      collectionError = null,
     )
     persistDeliveryState(nextStarted, nextArrived)
   }
@@ -376,8 +389,46 @@ class RiderAppViewModel(
     _ui.value = _ui.value.copy(
       startedOrderIds = nextStarted,
       arrivedOrderIds = nextArrived,
+      collectionError = null,
     )
     persistDeliveryState(nextStarted, nextArrived)
+  }
+
+  fun confirmCashCollection(orderId: String) {
+    val session = _ui.value.session ?: return
+    if (_ui.value.isConfirmingCollection) return
+    viewModelScope.launch {
+      _ui.value = _ui.value.copy(
+        isConfirmingCollection = true,
+        collectionMessage = null,
+        collectionError = null,
+      )
+      repository.confirmCashCollection(
+        session = session,
+        orderId = orderId,
+      ).onSuccess { ok ->
+        if (ok) {
+          _ui.value = _ui.value.copy(
+            isConfirmingCollection = false,
+            collectionMessage = "Payment received. Continue to OTP confirmation.",
+            collectionError = null,
+          )
+          refreshOrders(silent = true)
+        } else {
+          _ui.value = _ui.value.copy(
+            isConfirmingCollection = false,
+            collectionMessage = null,
+            collectionError = "Unable to confirm payment. Please retry.",
+          )
+        }
+      }.onFailure { err ->
+        _ui.value = _ui.value.copy(
+          isConfirmingCollection = false,
+          collectionMessage = null,
+          collectionError = err.message ?: "Unable to confirm payment collection.",
+        )
+      }
+    }
   }
 
   fun setOtpCode(value: String) {
@@ -391,6 +442,18 @@ class RiderAppViewModel(
   fun verifyOtp(orderId: String) {
     val session = _ui.value.session ?: return
     val otp = _ui.value.otpCode
+    val order = _ui.value.orders.firstOrNull { it.id == orderId }
+    if (
+      order != null &&
+      order.requiresCollection &&
+      order.amountDueCedis > 0 &&
+      order.paymentStatus != DispatchPaymentStatus.PAID
+    ) {
+      _ui.value = _ui.value.copy(
+        otpError = "Confirm payment collection before OTP verification.",
+      )
+      return
+    }
     if (otp.length != 6) {
       _ui.value = _ui.value.copy(otpError = "Enter the 6-digit OTP")
       return
@@ -412,6 +475,8 @@ class RiderAppViewModel(
             otpCode = "",
             otpMessage = "Delivery marked successfully.",
             otpError = null,
+            collectionMessage = null,
+            collectionError = null,
             otpCompletedOrderId = orderId,
           )
           persistDeliveryState(

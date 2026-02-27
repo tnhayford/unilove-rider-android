@@ -4,6 +4,7 @@ import com.unilove.rider.BuildConfig
 import com.unilove.rider.data.api.DeliveryVerifyRequest
 import com.unilove.rider.data.api.NetworkModule
 import com.unilove.rider.data.api.RegisterDeviceTokenRequest
+import com.unilove.rider.data.api.RiderCashCollectionRequest
 import com.unilove.rider.data.api.RiderIncidentRequest
 import com.unilove.rider.data.api.RiderLoginRequest
 import com.unilove.rider.data.api.RiderShiftUpdateRequest
@@ -21,6 +22,8 @@ import com.unilove.rider.domain.repository.PerformanceRepository
 import com.unilove.rider.domain.repository.SettingsRepository
 import com.unilove.rider.model.AppThemeMode
 import com.unilove.rider.model.DeliveryMetrics
+import com.unilove.rider.model.DispatchPaymentMethod
+import com.unilove.rider.model.DispatchPaymentStatus
 import com.unilove.rider.model.DeliveryStatus
 import com.unilove.rider.model.DispatchOrder
 import com.unilove.rider.model.IncidentCategory
@@ -150,6 +153,12 @@ class StaffAppRepository(
       val data = response.data ?: throw IllegalStateException(response.error ?: "Unable to load dispatch queue")
       val mapped = data.map { dto ->
         val phone = (dto.customerPhoneMasked ?: maskPhone(dto.customerPhone)).trim()
+        val paymentMethod = dto.paymentMethod.toDispatchPaymentMethod()
+        val paymentStatus = (dto.paymentStatusCode ?: dto.paymentStatus).toDispatchPaymentStatus()
+        val requiresCollection = dto.requiresCollection
+          ?: (paymentMethod == DispatchPaymentMethod.CASH_ON_DELIVERY && paymentStatus != DispatchPaymentStatus.PAID)
+        val amountDue = dto.amountDueCedis
+          ?: if (requiresCollection) (dto.subtotalCedis ?: 0.0) else 0.0
         DispatchOrder(
           id = dto.id,
           orderNumber = dto.orderNumber,
@@ -157,6 +166,10 @@ class StaffAppRepository(
           customerPhone = phone,
           address = dto.address,
           status = dto.status.toDeliveryStatus(),
+          paymentMethod = paymentMethod,
+          paymentStatus = paymentStatus,
+          amountDueCedis = amountDue,
+          requiresCollection = requiresCollection,
           subtotalCedis = dto.subtotalCedis ?: 0.0,
           commissionRatePercent = dto.commissionRatePercent ?: 0.0,
           commissionCedis = dto.commissionCedis ?: 0.0,
@@ -174,6 +187,10 @@ class StaffAppRepository(
           customerPhoneMasked = maskPhone(order.customerPhone),
           address = order.address,
           status = order.status.name,
+          paymentMethod = order.paymentMethod.name,
+          paymentStatus = order.paymentStatus.name,
+          amountDueCedis = order.amountDueCedis,
+          requiresCollection = order.requiresCollection,
           createdAt = order.createdAt,
           updatedAt = order.updatedAt,
           cachedAtEpochMs = now,
@@ -187,6 +204,22 @@ class StaffAppRepository(
       }
       mapped
     }.mapKnownErrors(defaultMessage = "Unable to refresh dispatch queue.")
+  }
+
+  override suspend fun confirmCashCollection(
+    session: RiderSessionModel,
+    orderId: String,
+  ): Result<Boolean> {
+    return runCatching {
+      val api = NetworkModule.riderApi(baseUrl)
+      val response = api.confirmCashCollection(
+        authorization = "Bearer ${session.authToken}",
+        payload = RiderCashCollectionRequest(orderId = orderId, collectionMethod = "cash"),
+      )
+      val data = response.data ?: throw IllegalStateException(response.error ?: "Unable to confirm collection")
+      val status = (data.paymentStatusCode ?: "").trim().uppercase()
+      status == "PAID"
+    }.mapKnownErrors(defaultMessage = "Unable to confirm payment collection right now.")
   }
 
   override suspend fun verifyDeliveryOtp(
@@ -392,6 +425,10 @@ class StaffAppRepository(
       customerPhone = customerPhoneMasked,
       address = address,
       status = status.toDeliveryStatus(),
+      paymentMethod = paymentMethod.toDispatchPaymentMethod(),
+      paymentStatus = paymentStatus.toDispatchPaymentStatus(),
+      amountDueCedis = amountDueCedis,
+      requiresCollection = requiresCollection,
       createdAt = createdAt,
       updatedAt = updatedAt,
     )
@@ -436,6 +473,25 @@ class StaffAppRepository(
       "DELIVERED",
       "COMPLETED" -> DeliveryStatus.DELIVERED
       else -> DeliveryStatus.OTHER
+    }
+  }
+
+  private fun String?.toDispatchPaymentMethod(): DispatchPaymentMethod {
+    return when (this?.trim()?.lowercase()) {
+      "momo" -> DispatchPaymentMethod.MOMO
+      "cash_on_delivery",
+      "cod" -> DispatchPaymentMethod.CASH_ON_DELIVERY
+      "cash" -> DispatchPaymentMethod.CASH
+      else -> DispatchPaymentMethod.UNKNOWN
+    }
+  }
+
+  private fun String?.toDispatchPaymentStatus(): DispatchPaymentStatus {
+    return when (this?.trim()?.uppercase()) {
+      "PAID" -> DispatchPaymentStatus.PAID
+      "FAILED" -> DispatchPaymentStatus.FAILED
+      "PENDING" -> DispatchPaymentStatus.PENDING
+      else -> DispatchPaymentStatus.UNKNOWN
     }
   }
 

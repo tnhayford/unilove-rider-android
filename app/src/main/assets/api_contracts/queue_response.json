@@ -8,6 +8,11 @@
       "customerPhoneMasked": "0551234567",
       "address": "East Legon, Accra",
       "status": "READY_FOR_PICKUP",
+      "paymentMethod": "cash_on_delivery",
+      "paymentStatusCode": "PENDING",
+      "paymentStatus": "Pending",
+      "requiresCollection": true,
+      "amountDueCedis": 45.5,
       "createdAt": "2026-02-16T10:15:00Z",
       "updatedAt": "2026-02-16T10:20:00Z"
     }

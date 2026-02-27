@@ -45,6 +45,20 @@ enum class DeliveryStatus {
   OTHER,
 }
 
+enum class DispatchPaymentMethod {
+  MOMO,
+  CASH_ON_DELIVERY,
+  CASH,
+  UNKNOWN,
+}
+
+enum class DispatchPaymentStatus {
+  PENDING,
+  PAID,
+  FAILED,
+  UNKNOWN,
+}
+
 data class DispatchOrder(
   val id: String,
   val orderNumber: String,
@@ -52,6 +66,10 @@ data class DispatchOrder(
   val customerPhone: String,
   val address: String,
   val status: DeliveryStatus,
+  val paymentMethod: DispatchPaymentMethod = DispatchPaymentMethod.UNKNOWN,
+  val paymentStatus: DispatchPaymentStatus = DispatchPaymentStatus.UNKNOWN,
+  val amountDueCedis: Double = 0.0,
+  val requiresCollection: Boolean = false,
   val subtotalCedis: Double = 0.0,
   val commissionRatePercent: Double = 0.0,
   val commissionCedis: Double = 0.0,

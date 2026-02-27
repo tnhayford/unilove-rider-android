@@ -21,6 +21,11 @@ data class QueueOrderDto(
   @SerialName("subtotalCedis") val subtotalCedis: Double? = null,
   @SerialName("commissionRatePercent") val commissionRatePercent: Double? = null,
   @SerialName("commissionCedis") val commissionCedis: Double? = null,
+  @SerialName("paymentMethod") val paymentMethod: String? = null,
+  @SerialName("paymentStatus") val paymentStatus: String? = null,
+  @SerialName("paymentStatusCode") val paymentStatusCode: String? = null,
+  @SerialName("requiresCollection") val requiresCollection: Boolean? = null,
+  @SerialName("amountDueCedis") val amountDueCedis: Double? = null,
   @SerialName("createdAt") val createdAt: String,
   @SerialName("updatedAt") val updatedAt: String,
 )
@@ -36,6 +41,21 @@ data class DeliveryVerifyResponse(
   val success: Boolean,
   val attempts: Int,
   val attemptsRemaining: Int,
+)
+
+@Serializable
+data class RiderCashCollectionRequest(
+  val orderId: String,
+  val collectionMethod: String = "cash",
+  val note: String? = null,
+)
+
+@Serializable
+data class RiderCashCollectionResponse(
+  val orderId: String,
+  @SerialName("paymentStatusCode") val paymentStatusCode: String? = null,
+  @SerialName("paymentStatus") val paymentStatus: String? = null,
+  @SerialName("amountCollectedCedis") val amountCollectedCedis: Double? = null,
 )
 
 @Serializable

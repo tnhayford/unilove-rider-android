@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Person
@@ -48,6 +49,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.unilove.rider.model.DeliveryStatus
+import com.unilove.rider.model.DispatchPaymentMethod
+import com.unilove.rider.model.DispatchPaymentStatus
 import com.unilove.rider.model.DispatchListTab
 import com.unilove.rider.model.DispatchOrder
 import com.unilove.rider.model.ShiftStatus
@@ -258,6 +261,23 @@ private fun OrderCard(
         )
       }
 
+      val paymentHint = paymentSummary(order)
+      if (paymentHint != null) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          androidx.compose.material3.Icon(
+            Icons.Default.AttachMoney,
+            contentDescription = "Payment instruction",
+            tint = if (order.requiresCollection) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary,
+          )
+          Text(
+            text = paymentHint,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (order.requiresCollection) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary,
+            fontWeight = FontWeight.Bold,
+          )
+        }
+      }
+
       if (order.status == DeliveryStatus.READY_FOR_PICKUP) {
         Text(
           text = "Urgent • pickup ready ${ageLabel(order.createdAt)}",
@@ -329,6 +349,16 @@ private fun ageLabel(createdAt: String): String {
 
 private fun formatMoney(value: Double): String {
   return String.format("%.2f", value)
+}
+
+private fun paymentSummary(order: DispatchOrder): String? {
+  if (order.requiresCollection && order.amountDueCedis > 0) {
+    return "Collect GHS ${formatMoney(order.amountDueCedis)} before OTP"
+  }
+  if (order.paymentMethod == DispatchPaymentMethod.CASH_ON_DELIVERY && order.paymentStatus == DispatchPaymentStatus.PAID) {
+    return "Cash-on-delivery already collected"
+  }
+  return null
 }
 
 private fun hasPostNotificationsPermission(context: android.content.Context): Boolean {
