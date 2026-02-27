@@ -1,0 +1,11 @@
+{
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.sample",
+    "expiresInSeconds": 36000,
+    "rider": {
+      "id": "R00093",
+      "fullName": "Thomas Hayford"
+    }
+  },
+  "error": null
+}

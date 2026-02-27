@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "id": "0c2d8dc5-65d9-409c-a12b-c8da62629943",
+      "orderNumber": "R00125",
+      "customerName": "Kwame Darko",
+      "customerPhone": "0551234567",
+      "customerPhoneMasked": "0551234567",
+      "address": "East Legon, Accra",
+      "status": "READY_FOR_PICKUP",
+      "createdAt": "2026-02-16T10:15:00Z",
+      "updatedAt": "2026-02-16T10:20:00Z"
+    }
+  ],
+  "error": null
+}
