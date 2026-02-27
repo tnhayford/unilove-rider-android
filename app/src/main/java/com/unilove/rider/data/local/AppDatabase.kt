@@ -2,8 +2,10 @@ package com.unilove.rider.data.local
 
 import android.content.Context
 import androidx.room.Database
+import androidx.room.migration.Migration
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
   entities = [QueueCacheEntity::class, PendingExceptionEntity::class, IncidentLogEntity::class],
@@ -24,7 +26,32 @@ abstract class AppDatabase : RoomDatabase() {
           context.applicationContext,
           AppDatabase::class.java,
           "rider_app.db",
-        ).fallbackToDestructiveMigration().build().also { instance = it }
+        )
+          .addMigrations(MIGRATION_1_2)
+          .fallbackToDestructiveMigrationOnDowngrade()
+          .build()
+          .also { instance = it }
+      }
+    }
+
+    // Preserve existing rider cache/offline data across v1 -> v2 upgrades.
+    private val MIGRATION_1_2 = object : Migration(1, 2) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS `incident_logs` (
+            `id` TEXT NOT NULL,
+            `orderId` TEXT,
+            `category` TEXT NOT NULL,
+            `note` TEXT NOT NULL,
+            `location` TEXT,
+            `syncStatus` TEXT NOT NULL,
+            `createdAtEpochMs` INTEGER NOT NULL,
+            `syncedAtEpochMs` INTEGER,
+            PRIMARY KEY(`id`)
+          )
+          """.trimIndent(),
+        )
       }
     }
   }

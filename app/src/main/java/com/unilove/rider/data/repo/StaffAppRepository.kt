@@ -55,6 +55,12 @@ class StaffAppRepository(
   PerformanceRepository,
   SettingsRepository {
 
+  private fun maskPhone(value: String?): String {
+    val digitsOnly = value.orEmpty().filter { it.isDigit() }
+    if (digitsOnly.length < 4) return "****"
+    return "${digitsOnly.take(2)}******${digitsOnly.takeLast(2)}"
+  }
+
   override suspend fun login(
     riderId: String,
     pin: String,
@@ -143,7 +149,7 @@ class StaffAppRepository(
       )
       val data = response.data ?: throw IllegalStateException(response.error ?: "Unable to load dispatch queue")
       val mapped = data.map { dto ->
-        val phone = (dto.customerPhone ?: dto.customerPhoneMasked ?: "").trim()
+        val phone = (dto.customerPhoneMasked ?: maskPhone(dto.customerPhone)).trim()
         DispatchOrder(
           id = dto.id,
           orderNumber = dto.orderNumber,
@@ -165,7 +171,7 @@ class StaffAppRepository(
           id = order.id,
           orderNumber = order.orderNumber,
           customerName = order.customerName,
-          customerPhoneMasked = order.customerPhone,
+          customerPhoneMasked = maskPhone(order.customerPhone),
           address = order.address,
           status = order.status.name,
           createdAt = order.createdAt,
